@@ -1,30 +1,51 @@
 import requests
 import zipfile
 import logging
-import shutil
 
 from pathlib import Path
 
-from backend.constants import DEFAULT_PRESET
+from backend.constants import CHUNK_SIZE
 
 
-def download_file(url: str, output_path: Path) -> None:
+def start_requests_session() -> requests.Session:
+    session: requests.Session = requests.Session()
+    # get a session object with the 1st page result
+    return session
+
+
+# This function has been replaced by ReleaseAsset.download_asset in items.py
+def download_file(url: str, output_path: Path, chunk_size: int = CHUNK_SIZE) -> None:
     """
-    Downloads a file in chunks
+    Downloads a file in chunks. If output_path is a directory, then
+    the last part of the url is taken as the name.
+
+    Useless due to the asset class in items.py. Will leave here for later.
+
+    So if the output path is ./downloads and the url is
+    https://github.com/mastercomfig/mastercomfig/releases/download/dev/autoexec.cfg,
+    then the final saved file will be at ./downloads/autoexec.cfg
 
     Args:
         url (str): The url to download
         output_path (Path): Where to download the file
             A full path with a name
             https://docs.python.org/3/library/pathlib.html#pathlib.PurePath.name
+        chunk_size (int): Chunk size to download the images
+            Do this because downloading the files whole is very taxing on the system
 
     Returns:
         None
     """
+    output_path = output_path.resolve()
+
+    if output_path.is_dir():
+        logging.info(f"Directory detected: {output_path}")
+        output_path = output_path / Path(url).name  # pathlib works with urls pog
+
     r: requests.Response = requests.get(url)
     with open(output_path, 'wb') as file:
-        logging.info(f"Downloading mastercomfig.zip to {output_path}")
-        for chunk in r.iter_content(chunk_size=8192):
+        logging.info(f"Downloading {url} to {output_path}")
+        for chunk in r.iter_content(chunk_size=chunk_size):
             if chunk:
                 file.write(chunk)
 
@@ -63,42 +84,5 @@ def extract_zip(zip_file: Path, end_dir: Path, create_sub_folder: bool = True) -
     return end_dir
 
 
-def delete_unneeded_prefixes(extracted_dir: Path, prefix_to_keep: str = DEFAULT_PRESET) -> None:
-    """
-    Looks in extracted_dir and deletes every preset that is not equal to prefix_to_keep
+#def get_
 
-    Args:
-        extracted_dir (Path): Path to where the files were extracted to
-        prefix_to_keep (str): The prefix to keep
-            MUST be in the form of mastercomfig-medium-low-preset
-            or mastercomfig-high-preset
-
-    Returns:
-
-    """
-    presets_dir: Path = extracted_dir / 'presets'
-    if not presets_dir.exists():
-        raise FileNotFoundError(f"Can't find {presets_dir} in {extracted_dir}")
-
-    for preset in presets_dir.iterdir():
-        if prefix_to_keep == preset.name:
-            shutil.rmtree(preset.absolute())
-
-    return
-
-
-def download_choices(choices: list[tuple[str,str]], output_folder: Path) -> None:
-    """
-    Downloads all choices selected to a file
-
-    Args:
-        choices (list[str]): The urls and names to download. These can be found in the request json.
-            index 0: url
-            index 1: name
-        output_folder (Path): Folder to download the images to.
-
-    Returns:
-        None
-    """
-    for choice in choices:
-        download_file(choice[0], output_folder / choice[1])
